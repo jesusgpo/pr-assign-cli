@@ -52,6 +52,6 @@ class AssignmentResult:
 
     repo: str
     pr_number: int
-    selected_reviewer: str
+    selected_reviewers: list[str]
     candidates: list[ReviewerLoad]
     dry_run: bool = False

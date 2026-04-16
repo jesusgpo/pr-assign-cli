@@ -125,11 +125,20 @@ class GitHubClient:
         pr_number: int,
         reviewer: str,
     ) -> None:
-        """Add a reviewer to a pull request."""
+        """Add a single reviewer to a pull request."""
+        await self.request_reviewers(repo, pr_number, [reviewer])
+
+    async def request_reviewers(
+        self,
+        repo: str,
+        pr_number: int,
+        reviewers: list[str],
+    ) -> None:
+        """Add one or more reviewers to a pull request."""
         url = f"/repos/{repo}/pulls/{pr_number}/requested_reviewers"
-        resp = await self._client.post(url, json={"reviewers": [reviewer]})
-        self._raise_for_status(resp, f"request_reviewer {repo}#{pr_number}")
-        logger.info("Reviewer '%s' assigned to %s#%d", reviewer, repo, pr_number)
+        resp = await self._client.post(url, json={"reviewers": reviewers})
+        self._raise_for_status(resp, f"request_reviewers {repo}#{pr_number}")
+        logger.info("Reviewers %s assigned to %s#%d", reviewers, repo, pr_number)
 
     # ------------------------------------------------------------------ #
     #  PR metadata                                                         #

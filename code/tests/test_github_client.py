@@ -40,14 +40,14 @@ async def test_calculate_monthly_review_score():
                 "items": [
                     {
                         "number": 10,
-                        "repository_url": f"{BASE}/repos/service-a",
+                        "repository_url": f"{BASE}/repos/my-org/service-a",
                     }
                 ],
             },
         )
     )
     # 2. Detalle del PR: 100 adiciones, 50 borrados, 5 comentarios, 3 review_comments
-    respx.get(f"{BASE}/repos/service-a/pulls/10").mock(
+    respx.get(f"{BASE}/repos/my-org/service-a/pulls/10").mock(
         return_value=Response(
             200,
             json={"additions": 100, "deletions": 50, "comments": 5, "review_comments": 3},
@@ -85,12 +85,12 @@ async def test_calculate_monthly_review_score_multiple_repos():
             json={
                 "total_count": 1,
                 "items": [
-                    {"number": 1, "repository_url": f"{BASE}/repos/service-a"},
+                    {"number": 1, "repository_url": f"{BASE}/repos/my-org/service-a"},
                 ],
             },
         )
     )
-    respx.get(f"{BASE}/repos/service-a/pulls/1").mock(
+    respx.get(f"{BASE}/repos/my-org/service-a/pulls/1").mock(
         return_value=Response(200, json={"additions": 10, "deletions": 5, "comments": 0, "review_comments": 0})
     )
     async with GitHubClient("fake-token", BASE) as client:

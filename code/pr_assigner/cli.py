@@ -25,6 +25,7 @@ from pr_assigner.selector import (
     assign_reviewer,
     build_reviewer_loads,
     select_reviewer,
+    select_reviewers,
 )
 
 app = typer.Typer(
@@ -86,19 +87,24 @@ def assign(
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompt and assign directly."),
     ] = False,
+    count: Annotated[
+        int,
+        typer.Option("--count", "-n", help="Number of reviewers to assign (default: 1).", min=1),
+    ] = 1,
 
     config: _CONFIG_OPTION = None,
     verbose: _VERBOSE_OPTION = False,
 ) -> None:
-    """Select and assign the least-loaded reviewer to a pull request.
+    """Select and assign the least-loaded reviewer(s) to a pull request.
 
     \b
     If repo or pr_number are omitted, an interactive menu is shown.
-    Always shows the proposed reviewer and asks for confirmation unless --yes is passed.
+    Always shows the proposed reviewer(s) and asks for confirmation unless --yes is passed.
 
     Examples:
       pr-assigner assign service-a 42
       pr-assigner assign service-a 42 --yes
+      pr-assigner assign service-a 42 --count 2
       pr-assigner assign          # fully interactive
     """
     _setup_logging(verbose)
@@ -120,7 +126,7 @@ def assign(
         if repo is None:
             raise typer.Exit(0)
 
-    asyncio.run(_assign_async(repo, pr_number, yes, config))
+    asyncio.run(_assign_async(repo, pr_number, yes, config, count))
 
 
 def _pick_from_list(title: str, items: list[str]) -> str | None:
@@ -148,6 +154,7 @@ async def _assign_async(
     pr_number: int | None,
     yes: bool,
     config_path: Path | None,
+    count: int = 1,
 ) -> None:
     try:
         cfg = load_config(config_path)
@@ -231,15 +238,20 @@ async def _assign_async(
 
         while True:
             try:
-                selected = select_reviewer(candidates, exclude=base_exclude | skipped)
+                selected_list = select_reviewers(
+                    candidates, count=count, exclude=base_exclude | skipped
+                )
             except NoReviewersAvailableError:
                 _abort("No more eligible reviewers for this PR.")
                 return
 
             # ── Show proposal ──────────────────────────────────────────── #
-            _print_load_table(candidates, highlight=selected.username)
+            _print_load_table(candidates, highlight=selected_list[0].username)
+            names = ", ".join(
+                f"[bold cyan]{r.username}[/bold cyan]" for r in selected_list
+            )
             console.print(
-                f"\n[bold]Proposed reviewer:[/bold] [bold cyan]{selected.username}[/bold cyan] "
+                f"\n[bold]Proposed reviewer(s):[/bold] {names} "
                 f"→ [white]{repo}[/white]#[white]{pr_number}[/white]"
             )
 
@@ -249,7 +261,7 @@ async def _assign_async(
             # ── Confirm: y / s / q ─────────────────────────────────────── #
             console.print(
                 "\n  [green]y[/green] assign   "
-                "[yellow]s[/yellow] skip to next   "
+                "[yellow]s[/yellow] skip last proposed   "
                 "[red]q[/red] abort"
             )
             while True:
@@ -270,20 +282,26 @@ async def _assign_async(
             if action == "abort":
                 console.print("[yellow]Aborted.[/yellow]")
                 raise typer.Exit(0)
-            # skip
-            console.print(f"[dim]Skipping {selected.username}…[/dim]")
-            skipped.add(selected.username)
+            # skip the last candidate in the proposed set; re-run selection
+            last = selected_list[-1].username
+            console.print(f"[dim]Skipping {last}…[/dim]")
+            skipped.add(last)
 
         # ── Assign ────────────────────────────────────────────────────── #
         try:
             repo_full = repo if "/" in repo else f"{cfg.org}/{repo}"
-            await client.request_reviewer(repo_full, pr_number, selected.username)
+            await client.request_reviewers(
+                repo_full, pr_number, [r.username for r in selected_list]
+            )
         except GitHubError as e:
             _abort(f"GitHub API error: {e}")
             return
 
+        names_plain = ", ".join(
+            f"[bold cyan]{r.username}[/bold cyan]" for r in selected_list
+        )
         console.print(
-            f"\n[green]ASSIGNED[/green] → [bold cyan]{selected.username}[/bold cyan] "
+            f"\n[green]ASSIGNED[/green] → {names_plain} "
             f"on [white]{repo}[/white]#[white]{pr_number}[/white]"
         )
 
