@@ -31,9 +31,18 @@ inputs:
   config-path:
     description: >
       Path to the config.yml file, relative to the calling repo's root.
+      Ignored when config-content is provided.
       Default: .github/pr-assigner.yml
     required: false
     default: ".github/pr-assigner.yml"
+
+  config-content:
+    description: >
+      Raw YAML content of the config file. When provided, config-path is ignored.
+      Use this to pass the config from a GitHub Actions variable:
+        config-content: ${{ vars.PR_ASSIGNER_CONFIG }}
+    required: false
+    default: ""
 
   uv-version:
     description: uv version to use.
@@ -81,17 +90,25 @@ runs:
       working-directory: _pr_assigner_src/code
       run: uv sync --frozen
 
-    # ── 5. Assign reviewers using the CALLER'S config ───────────────────── #
+    # ── 5. Resolve config path (inline content takes priority) ─────────── #
+    - name: Write inline config to temp file
+      if: inputs.config-content != ''
+      shell: bash
+      run: |
+        echo '${{ inputs.config-content }}' > "$RUNNER_TEMP/pr-assigner-config.yml"
+
+    # ── 6. Assign reviewers using the CALLER'S config ───────────────────── #
     - name: Assign reviewers
       shell: bash
       working-directory: _pr_assigner_src/code
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        CONFIG_PATH: ${{ inputs.config-content != '' && format('{0}/pr-assigner-config.yml', runner.temp) || format('{0}/{1}', github.workspace, inputs.config-path) }}
       run: |
         uv run pr-assigner assign \
           "${{ github.repository }}" \
           "${{ inputs.pr-number }}" \
           --yes \
           --count "${{ inputs.reviewer-count }}" \
-          --config "$GITHUB_WORKSPACE/${{ inputs.config-path }}"
+          --config "$CONFIG_PATH"
 

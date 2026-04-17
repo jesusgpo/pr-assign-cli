@@ -19,7 +19,7 @@ When a PR is opened, the action:
 
 ### 1. Add a config file to your repo
 
-Copy [`.github/examples/pr-assigner.example.yml`](.github/examples/pr-assigner.example.yml) to `.github/pr-assigner.yml` in your repo and edit it:
+Create `.github/pr-assigner.yml` in your repo:
 
 ```yaml
 github:
@@ -29,7 +29,7 @@ github:
 groups:
   my-team:
     repos:
-      - my-repo-name
+      - my-repo-name      # short name → <org>/my-repo-name
     reviewers:
       - alice
       - bob
@@ -38,7 +38,7 @@ groups:
 
 ### 2. Add the workflow
 
-Copy [`.github/examples/target-repo-workflow.yml`](.github/examples/target-repo-workflow.yml) to `.github/workflows/auto-assign-reviewers.yml` in your repo:
+Create `.github/workflows/auto-assign-reviewers.yml` in your repo:
 
 ```yaml
 name: Auto-assign reviewers
@@ -61,7 +61,7 @@ jobs:
         with:
           github-token:   ${{ secrets.GITHUB_TOKEN }}
           pr-number:      ${{ github.event.pull_request.number }}
-          reviewer-count: 2
+          reviewer-count: 2                        # ← change to 1, 2, 3…
           config-path:    .github/pr-assigner.yml
 ```
 
@@ -114,8 +114,6 @@ The release workflow detects the change and automatically:
 - Moves the `v1` floating tag to the same commit
 
 If the tag already exists (e.g. you pushed without bumping the version), the workflow skips silently.
-
-After publishing the release, the `v1` floating tag is updated automatically by [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ---
 

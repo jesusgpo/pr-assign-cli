@@ -1,8 +1,17 @@
 name: Auto-assign reviewers
 
 on:
-  pull_request:
-    types: [opened, ready_for_review, reopened]
+  workflow_call:
+    inputs:
+      pr_number:
+        description: "Pull request number to assign reviewers to"
+        required: true
+        type: number
+      reviewer_count:
+        description: "Number of reviewers to assign"
+        required: false
+        type: number
+        default: 2
 
 permissions:
   pull-requests: write
@@ -12,7 +21,6 @@ jobs:
   assign-reviewers:
     name: Assign reviewers by workload
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
 
     steps:
       - name: Checkout
@@ -39,9 +47,9 @@ jobs:
         run: |
           uv run pr-assigner assign \
             "${{ github.repository }}" \
-            "${{ github.event.pull_request.number }}" \
+            "${{ inputs.pr_number }}" \
             --yes \
-            --count "${{ vars.REVIEWER_COUNT || '2' }}" \
+            --count "${{ inputs.reviewer_count }}" \
             --config config.yml
 
 
