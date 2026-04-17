@@ -1,0 +1,49 @@
+# config.yml — pr-assigner configuration
+# Copy this file as config.yml and adjust the values.
+#
+# Quick start:
+#   1. Set GITHUB_TOKEN in your environment (or paste the token below)
+#   2. Replace "your-github-org" with your GitHub organisation/username
+#   3. Define your reviewer groups (repos + reviewers)
+
+github:
+  # GitHub personal-access token with scopes: repo, read:org
+  # Recommended: use an environment variable reference.
+  token: "${GITHUB_TOKEN}"
+  org: "your-github-org"
+  # Optional: base API URL for GitHub Enterprise installations.
+  # base_url: "https://github.mycompany.com/api/v3"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reviewer groups
+# ──────────────────────────────────────────────────────────────────────────────
+# Each group has its own pool of repos and reviewers.
+# A reviewer can belong to multiple groups.
+# Repo names without an explicit "owner/" prefix are auto-prefixed with the org.
+
+groups:
+  backend:
+    repos:
+      - wsc-service-a
+      - wsc-service-b
+    reviewers:
+      - alice
+      - bob
+      - carol
+
+  frontend:
+    repos:
+      - spa-frontend-a
+      - spa-frontend-b
+    reviewers:
+      - dave
+      - eve
+      - frank
+
+  # Example: a group where a repo uses the full owner/repo format
+  # shared:
+  #   repos:
+  #     - other-org/shared-library
+  #   reviewers:
+  #     - alice
+  #     - dave

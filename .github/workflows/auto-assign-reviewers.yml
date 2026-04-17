@@ -1,0 +1,55 @@
+name: Auto-assign reviewers
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        description: "Pull request number to assign reviewers to"
+        required: true
+        type: number
+      reviewer_count:
+        description: "Number of reviewers to assign"
+        required: false
+        type: number
+        default: 2
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  assign-reviewers:
+    name: Assign reviewers by workload
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.9.7"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: code/.tool-versions
+
+      - name: Install dependencies
+        working-directory: code
+        run: uv sync --frozen
+
+      - name: Assign reviewers
+        working-directory: code
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          uv run pr-assigner assign \
+            "${{ github.repository }}" \
+            "${{ inputs.pr_number }}" \
+            --yes \
+            --count "${{ inputs.reviewer_count }}" \
+            --config config.yml
+
+

@@ -1,0 +1,114 @@
+name: PR Reviewer Assigner
+description: >
+  Assign the least-loaded reviewer(s) to a pull request using workload balancing.
+  Each repository provides its own config.yml with their groups and reviewers.
+
+author: jesusgpo
+
+branding:
+  icon: users
+  color: blue
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Inputs
+# ──────────────────────────────────────────────────────────────────────────────
+inputs:
+  github-token:
+    description: >
+      GitHub token with pull-requests:write scope.
+      Pass ${{ secrets.GITHUB_TOKEN }} from the caller workflow.
+    required: true
+
+  pr-number:
+    description: Pull request number to assign reviewers to.
+    required: true
+
+  reviewer-count:
+    description: Number of reviewers to assign (default 2).
+    required: false
+    default: "2"
+
+  config-path:
+    description: >
+      Path to the config.yml file, relative to the calling repo's root.
+      Ignored when config-content is provided.
+      Default: .github/pr-assigner.yml
+    required: false
+    default: ".github/pr-assigner.yml"
+
+  config-content:
+    description: >
+      Raw YAML content of the config file. When provided, config-path is ignored.
+      Use this to pass the config from a GitHub Actions variable:
+        config-content: ${{ vars.PR_ASSIGNER_CONFIG }}
+    required: false
+    default: ""
+
+  uv-version:
+    description: uv version to use.
+    required: false
+    default: "0.9.7"
+
+  python-version:
+    description: Python version to use.
+    required: false
+    default: "3.11.5"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Implementation (composite)
+# ──────────────────────────────────────────────────────────────────────────────
+# NOTE: When this action runs, $GITHUB_WORKSPACE already contains the CALLING
+# repo (because the caller runs actions/checkout before invoking this action).
+# We only need to check out the pr-assign-cli SOURCE CODE into a temp subdir.
+runs:
+  using: composite
+
+  steps:
+    # ── 1. Check out pr-assign-cli source code (the tool itself) ─────────── #
+    - name: Checkout pr-assign-cli (tool source)
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.action_repository }}
+        ref: ${{ github.action_ref }}
+        path: _pr_assigner_src   # subfolder — doesn't overwrite caller's files
+
+    # ── 2. Set up uv ────────────────────────────────────────────────────── #
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: ${{ inputs.uv-version }}
+
+    # ── 3. Set up Python ────────────────────────────────────────────────── #
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    # ── 4. Install pr-assigner ──────────────────────────────────────────── #
+    - name: Install pr-assigner
+      shell: bash
+      working-directory: _pr_assigner_src/code
+      run: uv sync --frozen
+
+    # ── 5. Resolve config path (inline content takes priority) ─────────── #
+    - name: Write inline config to temp file
+      if: inputs.config-content != ''
+      shell: bash
+      run: |
+        echo '${{ inputs.config-content }}' > "$RUNNER_TEMP/pr-assigner-config.yml"
+
+    # ── 6. Assign reviewers using the CALLER'S config ───────────────────── #
+    - name: Assign reviewers
+      shell: bash
+      working-directory: _pr_assigner_src/code
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        CONFIG_PATH: ${{ inputs.config-content != '' && format('{0}/pr-assigner-config.yml', runner.temp) || format('{0}/{1}', github.workspace, inputs.config-path) }}
+      run: |
+        uv run pr-assigner assign \
+          "${{ github.repository }}" \
+          "${{ inputs.pr-number }}" \
+          --yes \
+          --count "${{ inputs.reviewer-count }}" \
+          --config "$CONFIG_PATH"
+

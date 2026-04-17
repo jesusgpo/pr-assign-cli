@@ -1,0 +1,26 @@
+name: Test action (composite)
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  test-assign:
+    name: Test pr-assign-cli action
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout calling repo
+        uses: actions/checkout@v4
+
+      - name: Assign reviewers via action
+        uses: jesusgpo/pr-assign-cli@feature/GH-1-initial-development
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+          config-content: ${{ vars.PR_ASSIGNER_CONFIG }}
