@@ -233,6 +233,15 @@ async def _assign_async(
             _abort(f"GitHub API error: {e}")
             return
 
+        # ── Idempotency guard: skip if already has enough reviewers ──── #
+        if len(already_assigned) >= count:
+            console.print(
+                f"[dim]PR #{pr_number} already has {len(already_assigned)} reviewer(s) "
+                f"assigned ({', '.join(sorted(already_assigned))}). "
+                f"Nothing to do.[/dim]"
+            )
+            return
+
         skipped: set[str] = set()
         base_exclude = already_assigned | {pr_author}
 

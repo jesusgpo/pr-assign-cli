@@ -1,0 +1,98 @@
+name: Release
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Triggered automatically on every push to main that touches pyproject.toml.
+#
+# Full release workflow — the ONLY thing you need to do is:
+#   1. Bump the version in code/pyproject.toml  →  version = "1.2.3"
+#   2. Push (or merge a PR) to main
+#
+# The workflow then:
+#   1. Reads the version from code/pyproject.toml
+#   2. Skips if tag v{version} already exists (idempotent)
+#   3. Creates the git tag v{version}
+#   4. Creates a GitHub Release with auto-generated notes
+#   5. Moves the major floating tag (e.g. v1) to the same commit
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "code/pyproject.toml"   # only run when the version file changes
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag and release
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────── #
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for release notes
+
+      # ── 2. Read version from pyproject.toml ──────────────────────────── #
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          PKG_VERSION="$(grep -m1 '^version' code/pyproject.toml \
+                          | sed 's/.*= *"\(.*\)"/\1/')"
+          echo "version=$PKG_VERSION"      >> "$GITHUB_OUTPUT"
+          echo "tag=v${PKG_VERSION}"       >> "$GITHUB_OUTPUT"
+          echo "major=v${PKG_VERSION%%.*}" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $PKG_VERSION (tag: v${PKG_VERSION})"
+
+      # ── 3. Skip if tag already exists (re-push without version bump) ── #
+      - name: Check if tag already exists
+        id: check
+        shell: bash
+        run: |
+          if git rev-parse "${{ steps.version.outputs.tag }}" \
+               --verify --quiet > /dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.version.outputs.tag }} already exists — skipping release."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 4. Create version tag ─────────────────────────────────────────── #
+      - name: Create version tag
+        if: steps.check.outputs.skip == 'false'
+        shell: bash
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.tag }}" \
+              -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      # ── 5. Create GitHub Release with auto-generated notes ───────────── #
+      - name: Create GitHub Release
+        if: steps.check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      # ── 6. Move major floating tag (e.g. v1 → this commit) ───────────── #
+      - name: Move major version tag
+        if: steps.check.outputs.skip == 'false'
+        shell: bash
+        run: |
+          MAJOR="${{ steps.version.outputs.major }}"
+          echo "Moving '$MAJOR' → '${{ steps.version.outputs.tag }}'"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -fa "$MAJOR" -m "Track ${{ steps.version.outputs.tag }}"
+          git push origin "$MAJOR" --force
+

@@ -134,6 +134,10 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# pr-assigner local config (contains tokens — never commit)
+config.yml
+code/config.yml
+
 # Environments
 .env
 .envrc
